@@ -1,0 +1,122 @@
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local BanStore = DataStoreService:GetDataStore("BanStore")
+
+-- Lista de admins
+local Admins = {
+	["Sacimc6"] = true,
+	["lapepa_1009"] = true,
+	["jadebb209"] = true
+}
+
+-- Función de volar
+local function flyPlayer(player)
+	local character = player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+	
+	local bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.Velocity = Vector3.new(0, 50, 0)
+	bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+	bodyVelocity.Parent = character.HumanoidRootPart
+end
+
+-- Dejar de volar
+local function unflyPlayer(player)
+	local character = player.Character
+	if not character then return end
+	
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	
+	for _, v in pairs(root:GetChildren()) do
+		if v:IsA("BodyVelocity") then
+			v:Destroy()
+		end
+	end
+end
+
+-- Banear jugador
+local function banPlayer(playerName, duration, reason)
+	local success, err = pcall(function()
+		BanStore:SetAsync(playerName, {
+			banned = true,
+			duration = duration,
+			reason = reason,
+			time = os.time()
+		})
+	end)
+end
+
+-- Comprobar ban al entrar
+Players.PlayerAdded:Connect(function(player)
+	local data
+	local success, err = pcall(function()
+		data = BanStore:GetAsync(player.Name)
+	end)
+	
+	if data and data.banned then
+		if data.duration == "permanent" then
+			player:Kick("Baneado permanentemente: " .. data.reason)
+		else
+			local tiempoPasado = os.time() - data.time
+			if tiempoPasado < data.duration then
+				player:Kick("Baneado: " .. data.reason)
+			end
+		end
+	end
+end)
+
+-- Detectar comandos del chat
+Players.PlayerAdded:Connect(function(player)
+	player.Chatted:Connect(function(msg)
+		
+		if not Admins[player.Name] then return end
+		
+		local args = string.split(msg, " ")
+		
+		-- ;fly
+		if args[1] == ";fly" then
+			if args[2] then
+				local target = Players:FindFirstChild(args[2])
+				if target then flyPlayer(target) end
+			else
+				flyPlayer(player)
+			end
+		end
+		
+		-- ;unfly
+		if args[1] == ";unfly" then
+			if args[2] then
+				local target = Players:FindFirstChild(args[2])
+				if target then unflyPlayer(target) end
+			else
+				unflyPlayer(player)
+			end
+		end
+		
+		-- ;ban
+		if args[1] == ";ban" then
+			if args[2] == "perman" and args[3] then
+				local targetName = args[3]
+				banPlayer(targetName, "permanent", "Uso de hacks")
+				
+				local target = Players:FindFirstChild(targetName)
+				if target then
+					target:Kick("Baneado permanentemente: hacks")
+				end
+			elseif args[2] then
+				local targetName = args[2]
+				banPlayer(targetName, 60*60*24*30, "Trampas")
+				
+				local target = Players:FindFirstChild(targetName)
+				if target then
+					target:Kick("Baneado 30 días: trampas")
+				end
+			end
+		end
+		
+	end)
+end)
